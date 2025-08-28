@@ -13,7 +13,7 @@ Aplikasi sederhana berbasis command line (CLI) untuk melakukan operasi CRUD (Cre
 1. **Clone repository**
    ```bash
    git clone https://github.com/6ems9/go-cli-crud.git
-   cd nama-repo
+   cd go-cli-crud
    ```
 2. **Jalankan aplikasi**
    ```bash
@@ -28,9 +28,6 @@ Setiap mahasiswa disimpan dalam format berikut:
   "Umur": 20
 }
 ```
-
-## Ketergantungan
-- Go 1.16 atau lebih baru
 
 ## Lisensi
 MIT
