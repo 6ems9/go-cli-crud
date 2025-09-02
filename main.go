@@ -34,7 +34,8 @@ func main() {
 		fmt.Println("2. Lihat Data Mahasiswa")
 		fmt.Println("3. Ubah Data Mahasiswa")
 		fmt.Println("4. Hapus Data Mahasiswa")
-		fmt.Println("5. Keluar")
+		fmt.Println("5. Statistik Mahasiswa")
+		fmt.Println("6. Keluar")
 		fmt.Print("Pilih menu: ")
 
 		scanner.Scan()
@@ -51,6 +52,8 @@ func main() {
 		case "4":
 			hapusMahasiswa(scanner) // Menghapus data mahasiswa
 		case "5":
+			statistikMahasiswa() // Menampilkan statistik mahasiswa
+		case "6":
 			fmt.Println("Terima kasih!")
 			return
 		default:
@@ -167,4 +170,31 @@ func loadDataJSON() {
 	if err := decoder.Decode(&data); err != nil {
 		fmt.Println("Gagal decode data dari JSON:", err)
 	}
+}
+
+// statistikMahasiswa menampilkan statistik data mahasiswa
+func statistikMahasiswa() {
+	if len(data) == 0 {
+		fmt.Println("Belum ada data mahasiswa.")
+		return
+	}
+	total := len(data)
+	sumUmur := 0
+	minUmur := data[0].Umur
+	maxUmur := data[0].Umur
+	for _, m := range data {
+		sumUmur += m.Umur
+		if m.Umur < minUmur {
+			minUmur = m.Umur
+		}
+		if m.Umur > maxUmur {
+			maxUmur = m.Umur
+		}
+	}
+	rataRata := float64(sumUmur) / float64(total)
+	fmt.Println("\nStatistik Mahasiswa:")
+	fmt.Printf("Total Mahasiswa: %d\n", total)
+	fmt.Printf("Rata-rata Umur: %.2f\n", rataRata)
+	fmt.Printf("Umur Termuda: %d\n", minUmur)
+	fmt.Printf("Umur Tertua: %d\n", maxUmur)
 }
