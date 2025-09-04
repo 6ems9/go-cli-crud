@@ -2,145 +2,118 @@
 package main
 
 import (
-	"bufio"         // Membaca input dari user via terminal
 	"encoding/json" // Encode/decode data ke/dari format JSON
-	"fmt"           // Menampilkan output ke layar
-	"os"            // Operasi file dan akses ke sistem operasi
+	"fmt"           // Menampilkan output ke terminal (log)
+	"html/template" // Render template HTML
+	"net/http"      // HTTP server dan handler
+	"os"            // Operasi file
 	"strconv"       // Konversi string ke tipe data lain
 	"strings"       // Manipulasi string
+	"sync"          // Sinkronisasi akses data (mutex)
 )
 
-// Mahasiswa merepresentasikan data mahasiswa
+// Mahasiswa merepresentasikan entitas mahasiswa
 type Mahasiswa struct {
 	Nama string // Nama mahasiswa
 	Umur int    // Umur mahasiswa
 }
 
-// data adalah slice untuk menyimpan daftar mahasiswa
+// data adalah slice global untuk menyimpan daftar mahasiswa
 var data []Mahasiswa
 
-const dataFile = "mahasiswa.json" // Nama file untuk menyimpan data
+const dataFile = "mahasiswa.json" // Nama file untuk menyimpan data JSON
 
-// Fungsi utama program
+// Mutex untuk menghindari race condition saat akses data
+var mu sync.Mutex
+
 func main() {
-	// Load data dari file JSON jika ada
 	loadDataJSON()
+	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/tambah", tambahHandler)
+	http.HandleFunc("/hapus", hapusHandler)
+	// Untuk static file jika perlu
+	// http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	fmt.Println("Server berjalan di http://localhost:8080")
+	http.ListenAndServe(":8080", nil)
+}
 
-	scanner := bufio.NewScanner(os.Stdin) // Membaca input dari user
-	for {
-		// Menampilkan menu utama
-		fmt.Println("\n=== Menu CRUD Mahasiswa ===")
-		fmt.Println("1. Tambah Mahasiswa")
-		fmt.Println("2. Lihat Data Mahasiswa")
-		fmt.Println("3. Ubah Data Mahasiswa")
-		fmt.Println("4. Hapus Data Mahasiswa")
-		fmt.Println("5. Statistik Mahasiswa")
-		fmt.Println("6. Keluar")
-		fmt.Print("Pilih menu: ")
+type Statistik struct {
+	Total    int
+	RataRata float64
+	Min      int
+	Max      int
+}
 
-		scanner.Scan()
-		pilihan := scanner.Text()
+type PageData struct {
+	Mahasiswa []Mahasiswa
+	Statistik Statistik
+}
 
-		// Menangani pilihan menu
-		switch pilihan {
-		case "1":
-			tambahMahasiswa(scanner) // Menambah data mahasiswa
-		case "2":
-			lihatMahasiswa() // Melihat data mahasiswa
-		case "3":
-			ubahMahasiswa(scanner) // Mengubah data mahasiswa
-		case "4":
-			hapusMahasiswa(scanner) // Menghapus data mahasiswa
-		case "5":
-			statistikMahasiswa() // Menampilkan statistik mahasiswa
-		case "6":
-			fmt.Println("Terima kasih!")
-			return
-		default:
-			fmt.Println("Pilihan tidak valid.")
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	defer mu.Unlock()
+	tmpl := template.Must(template.New("index.html").Funcs(template.FuncMap{"inc": func(i int) int { return i + 1 }}).ParseFiles("templates/index.html"))
+	stat := hitungStatistik()
+	data := PageData{Mahasiswa: data, Statistik: stat}
+	tmpl.Execute(w, data)
+}
+
+func tambahHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	nama := r.FormValue("nama")
+	umurStr := r.FormValue("umur")
+	umur, err := strconv.Atoi(strings.TrimSpace(umurStr))
+	if err != nil || nama == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	data = append(data, Mahasiswa{Nama: nama, Umur: umur})
+	simpanDataJSON()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func hapusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	idxStr := r.FormValue("id")
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil || idx < 0 || idx >= len(data) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	data = append(data[:idx], data[idx+1:]...)
+	simpanDataJSON()
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func hitungStatistik() Statistik {
+	if len(data) == 0 {
+		return Statistik{Total: 0, RataRata: 0, Min: 0, Max: 0}
+	}
+	total := len(data)
+	sumUmur := 0
+	minUmur := data[0].Umur
+	maxUmur := data[0].Umur
+	for _, m := range data {
+		sumUmur += m.Umur
+		if m.Umur < minUmur {
+			minUmur = m.Umur
+		}
+		if m.Umur > maxUmur {
+			maxUmur = m.Umur
 		}
 	}
-}
-
-// tambahMahasiswa menambah data mahasiswa baru ke slice data
-func tambahMahasiswa(scanner *bufio.Scanner) {
-	fmt.Print("Masukkan nama: ")
-	scanner.Scan()
-	nama := scanner.Text()
-	fmt.Print("Masukkan umur: ")
-	scanner.Scan()
-	umurStr := scanner.Text()
-	umur, err := strconv.Atoi(strings.TrimSpace(umurStr)) // Konversi umur ke integer
-	if err != nil {
-		fmt.Println("Umur harus berupa angka.")
-		return
-	}
-	data = append(data, Mahasiswa{Nama: nama, Umur: umur}) // Tambah ke slice data
-	simpanDataJSON()                                       // Simpan ke file JSON
-	fmt.Println("Data berhasil ditambahkan.")
-}
-
-// lihatMahasiswa menampilkan seluruh data mahasiswa
-func lihatMahasiswa() {
-	if len(data) == 0 {
-		fmt.Println("Belum ada data mahasiswa.")
-		return
-	}
-	fmt.Println("\nDaftar Mahasiswa:")
-	for i, m := range data {
-		fmt.Printf("%d. %s (Umur: %d)\n", i+1, m.Nama, m.Umur)
-	}
-}
-
-// ubahMahasiswa mengubah data mahasiswa berdasarkan nomor urut
-func ubahMahasiswa(scanner *bufio.Scanner) {
-	lihatMahasiswa() // Tampilkan data terlebih dahulu
-	if len(data) == 0 {
-		return
-	}
-	fmt.Print("Masukkan nomor mahasiswa yang ingin diubah: ")
-	scanner.Scan()
-	idxStr := scanner.Text()
-	idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
-	if err != nil || idx < 1 || idx > len(data) {
-		fmt.Println("Nomor tidak valid.")
-		return
-	}
-	idx-- // Ubah ke index slice (mulai dari 0)
-	fmt.Print("Masukkan nama baru: ")
-	scanner.Scan()
-	nama := scanner.Text()
-	fmt.Print("Masukkan umur baru: ")
-	scanner.Scan()
-	umurStr := scanner.Text()
-	umur, err := strconv.Atoi(strings.TrimSpace(umurStr))
-	if err != nil {
-		fmt.Println("Umur harus berupa angka.")
-		return
-	}
-	data[idx] = Mahasiswa{Nama: nama, Umur: umur} // Update data
-	simpanDataJSON()                              // Simpan ke file JSON
-	fmt.Println("Data berhasil diubah.")
-}
-
-// hapusMahasiswa menghapus data mahasiswa berdasarkan nomor urut
-func hapusMahasiswa(scanner *bufio.Scanner) {
-	lihatMahasiswa() // Tampilkan data terlebih dahulu
-	if len(data) == 0 {
-		return
-	}
-	fmt.Print("Masukkan nomor mahasiswa yang ingin dihapus: ")
-	scanner.Scan()
-	idxStr := scanner.Text()
-	idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
-	if err != nil || idx < 1 || idx > len(data) {
-		fmt.Println("Nomor tidak valid.")
-		return
-	}
-	idx--                                      // Ubah ke index slice (mulai dari 0)
-	data = append(data[:idx], data[idx+1:]...) // Hapus data dari slice
-	simpanDataJSON()                           // Simpan ke file JSON
-	fmt.Println("Data berhasil dihapus.")
+	rataRata := float64(sumUmur) / float64(total)
+	return Statistik{Total: total, RataRata: rataRata, Min: minUmur, Max: maxUmur}
 }
 
 // simpanDataJSON menyimpan slice data ke file JSON
@@ -170,31 +143,4 @@ func loadDataJSON() {
 	if err := decoder.Decode(&data); err != nil {
 		fmt.Println("Gagal decode data dari JSON:", err)
 	}
-}
-
-// statistikMahasiswa menampilkan statistik data mahasiswa
-func statistikMahasiswa() {
-	if len(data) == 0 {
-		fmt.Println("Belum ada data mahasiswa.")
-		return
-	}
-	total := len(data)
-	sumUmur := 0
-	minUmur := data[0].Umur
-	maxUmur := data[0].Umur
-	for _, m := range data {
-		sumUmur += m.Umur
-		if m.Umur < minUmur {
-			minUmur = m.Umur
-		}
-		if m.Umur > maxUmur {
-			maxUmur = m.Umur
-		}
-	}
-	rataRata := float64(sumUmur) / float64(total)
-	fmt.Println("\nStatistik Mahasiswa:")
-	fmt.Printf("Total Mahasiswa: %d\n", total)
-	fmt.Printf("Rata-rata Umur: %.2f\n", rataRata)
-	fmt.Printf("Umur Termuda: %d\n", minUmur)
-	fmt.Printf("Umur Tertua: %d\n", maxUmur)
 }
