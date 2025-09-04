@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRUD Mahasiswa</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+        form { margin-bottom: 2em; }
+        .actions { display: flex; gap: 0.5em; }
+    </style>
+</head>
+<body>
+    <h1>CRUD Mahasiswa</h1>
+    <form method="POST" action="/tambah">
+        <input type="text" name="nama" placeholder="Nama" required>
+        <input type="number" name="umur" placeholder="Umur" required>
+        <button type="submit">Tambah</button>
+    </form>
+    <table>
+        <thead>
+            <tr>
+                <th>No</th>
+                <th>Nama</th>
+                <th>Umur</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $i, $m := .Mahasiswa}}
+            <tr>
+                <td>{{$i | inc}}</td>
+                <td>{{$m.Nama}}</td>
+                <td>{{$m.Umur}}</td>
+                <td class="actions">
+                    <form method="POST" action="/hapus" style="display:inline">
+                        <input type="hidden" name="id" value="{{$i}}">
+                        <button type="submit">Hapus</button>
+                    </form>
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="4">Belum ada data mahasiswa.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+    <h2>Statistik</h2>
+    <ul>
+        <li>Total Mahasiswa: {{.Statistik.Total}}</li>
+        <li>Rata-rata Umur: {{printf "%.2f" .Statistik.RataRata}}</li>
+        <li>Umur Termuda: {{.Statistik.Min}}</li>
+        <li>Umur Tertua: {{.Statistik.Max}}</li>
+    </ul>
+</body>
+</html>
